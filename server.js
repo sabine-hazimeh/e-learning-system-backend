@@ -15,7 +15,7 @@ app.use(
 );
 
 app.use(bodyParser.json());
-
+app.use("/uploads", express.static("uploads"));
 app.use("/api", routes);
 
 const PORT = process.env.PORT || 3000;

@@ -6,8 +6,8 @@ const File = require("./models/File");
 const Enrollment = require("./models/Enrollment");
 const Withdrawal = require("./models/Withdrawal");
 const { generateToken } = require("./utils/jwt");
+const authMiddleware = require("./utils/authMiddleware");
 
-// User registration
 router.post("/register", async (req, res) => {
   try {
     const { username, password, email, role, fullName } = req.body;
@@ -19,7 +19,6 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// User login
 router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -34,41 +33,6 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Get all users
-router.get("/users", async (req, res) => {
-  try {
-    const users = await User.find();
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Update a user by ID
-router.put("/users/:id", async (req, res) => {
-  try {
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json(user);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Delete a user by ID
-router.delete("/users/:id", async (req, res) => {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ message: "User deleted" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Create a new class
 router.post("/classes", async (req, res) => {
   try {
     const classData = new Class(req.body);
@@ -79,43 +43,38 @@ router.post("/classes", async (req, res) => {
   }
 });
 
-// Get all classes
-router.get("/classes", async (req, res) => {
+router.post("/enrollment", authMiddleware, async (req, res) => {
   try {
-    const classes = await Class.find()
-      .populate("instructor")
-      .populate("enrolledStudents")
-      .populate("files");
-    res.json(classes);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    const { classId } = req.body;
+    const userId = req.user.id;
 
-// Update a class by ID
-router.put("/classes/:id", async (req, res) => {
-  try {
-    const classData = await Class.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
-    if (!classData) return res.status(404).json({ error: "Class not found" });
-    res.json(classData);
+    if (!classId) {
+      return res.status(400).json({ error: "Class ID is required" });
+    }
+
+    const existingEnrollment = await Enrollment.findOne({ userId, classId });
+    if (existingEnrollment) {
+      return res.status(400).json({ error: "Already enrolled in this class" });
+    }
+
+    const enrollmentData = new Enrollment({ userId, classId });
+    await enrollmentData.save();
+    res.status(201).json(enrollmentData);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// Delete a class by ID
-router.delete("/classes/:id", async (req, res) => {
+router.get("/enrollment", authMiddleware, async (req, res) => {
   try {
-    const classData = await Class.findByIdAndDelete(req.params.id);
-    if (!classData) return res.status(404).json({ error: "Class not found" });
-    res.json({ message: "Class deleted" });
+    const userId = req.user.id;
+    const enrollments = await Enrollment.find({ userId }).populate("classId");
+    res.status(200).json(enrollments);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// Create a new file
+
 router.post("/files", async (req, res) => {
   try {
     const file = new File(req.body);
@@ -126,37 +85,38 @@ router.post("/files", async (req, res) => {
   }
 });
 
-// Get all files
-router.get("/files", async (req, res) => {
+router.get("/files/:classId", async (req, res) => {
   try {
-    const files = await File.find().populate("uploadedBy").populate("classId");
-    res.json(files);
+    const { classId } = req.params;
+    const files = await File.find({ classId }).populate(
+      "uploadedBy",
+      "username"
+    );
+    res.status(200).json(files);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Update a file by ID
-router.put("/files/:id", async (req, res) => {
+router.post("/withdrawals", authMiddleware, async (req, res) => {
   try {
-    const file = await File.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+    const { classId } = req.body;
+    const userId = req.user.id;
+
+    if (!classId) {
+      return res.status(400).json({ error: "Class ID is required" });
+    }
+
+    const withdrawal = new Withdrawal({
+      userId,
+      classId,
+      status: "pending",
     });
-    if (!file) return res.status(404).json({ error: "File not found" });
-    res.json(file);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
 
-// Delete a file by ID
-router.delete("/files/:id", async (req, res) => {
-  try {
-    const file = await File.findByIdAndDelete(req.params.id);
-    if (!file) return res.status(404).json({ error: "File not found" });
-    res.json({ message: "File deleted" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    await withdrawal.save();
+    res.status(201).json({ message: "Withdrawal requested successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
