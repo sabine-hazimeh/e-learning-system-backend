@@ -161,5 +161,34 @@ router.get(
     }
   }
 );
+router.delete("/withdrawals/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Withdrawal.findByIdAndDelete(id);
+    res.status(200).json({ message: "Withdrawal deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete withdrawal" });
+  }
+});
+router.post("/withdrawals/accept/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const withdrawal = await Withdrawal.findById(id);
+    if (!withdrawal) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+    await Enrollment.findOneAndDelete({
+      userId: withdrawal.userId,
+      classId: withdrawal.classId,
+    });
+    withdrawal.status = "approved";
+    await withdrawal.save();
 
+    res
+      .status(200)
+      .json({ message: "Withdrawal accepted and enrollment removed" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to accept withdrawal" });
+  }
+});
 module.exports = router;
