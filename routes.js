@@ -7,7 +7,7 @@ const Enrollment = require("./models/Enrollment");
 const Withdrawal = require("./models/Withdrawal");
 const { generateToken } = require("./utils/jwt");
 const authMiddleware = require("./utils/authMiddleware");
-
+const adminMiddleware = require("./utils/adminMiddleware");
 router.post("/register", async (req, res) => {
   try {
     const { username, password, email, role, fullName } = req.body;
@@ -33,7 +33,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.post("/classes", async (req, res) => {
+router.post("/classes", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const classData = new Class(req.body);
     await classData.save();
@@ -119,5 +119,30 @@ router.post("/withdrawals", authMiddleware, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+router.get("/classes", async (req, res) => {
+  try {
+    const classes = await Class.find();
+
+    res.json(classes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.get(
+  "/all-enrollments",
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const enrollments = await Enrollment.find()
+        .populate("userId", "username email")
+        .populate("classId", "title");
+
+      res.status(200).json(enrollments);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
 
 module.exports = router;
