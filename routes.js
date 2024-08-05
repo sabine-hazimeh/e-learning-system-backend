@@ -119,6 +119,23 @@ router.post("/withdrawals", authMiddleware, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+router.get(
+  "/withdrawals",
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const withdrawals = await Withdrawal.find()
+        .populate("userId", "username email")
+        .populate("classId", "title");
+
+      res.status(200).json(withdrawals);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
 router.get("/classes", async (req, res) => {
   try {
     const classes = await Class.find();
