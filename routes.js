@@ -43,6 +43,9 @@ router.post("/login", async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+router.post("/logout", (req, res) => {
+  res.status(200).json({ message: "Logout successful" });
+});
 
 router.post("/classes", authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -81,26 +84,6 @@ router.get("/enrollment", authMiddleware, async (req, res) => {
     const userId = req.user.id;
     const enrollments = await Enrollment.find({ userId }).populate("classId");
     res.status(200).json(enrollments);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// router.post("/files", async (req, res) => {
-//   try {
-//     const file = new File(req.body);
-//     await file.save();
-//     res.status(201).json(file);
-//   } catch (err) {
-//     res.status(400).json({ error: err.message });
-//   }
-// });
-
-router.get("/files/:classId", async (req, res) => {
-  try {
-    const { classId } = req.params;
-    const files = await File.find({ classId });
-    res.status(200).json(files);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -169,36 +152,46 @@ router.get(
     }
   }
 );
-router.delete("/withdrawals/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    await Withdrawal.findByIdAndDelete(id);
-    res.status(200).json({ message: "Withdrawal deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to delete withdrawal" });
-  }
-});
-router.post("/withdrawals/accept/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const withdrawal = await Withdrawal.findById(id);
-    if (!withdrawal) {
-      return res.status(404).json({ error: "Withdrawal not found" });
+router.delete(
+  "/withdrawals/:id",
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      await Withdrawal.findByIdAndDelete(id);
+      res.status(200).json({ message: "Withdrawal deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete withdrawal" });
     }
-    await Enrollment.findOneAndDelete({
-      userId: withdrawal.userId,
-      classId: withdrawal.classId,
-    });
-    withdrawal.status = "approved";
-    await withdrawal.save();
-
-    res
-      .status(200)
-      .json({ message: "Withdrawal accepted and enrollment removed" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to accept withdrawal" });
   }
-});
+);
+router.post(
+  "/withdrawals/accept/:id",
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const withdrawal = await Withdrawal.findById(id);
+      if (!withdrawal) {
+        return res.status(404).json({ error: "Withdrawal not found" });
+      }
+      await Enrollment.findOneAndDelete({
+        userId: withdrawal.userId,
+        classId: withdrawal.classId,
+      });
+      withdrawal.status = "approved";
+      await withdrawal.save();
+
+      res
+        .status(200)
+        .json({ message: "Withdrawal accepted and enrollment removed" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to accept withdrawal" });
+    }
+  }
+);
 
 const FileStorageEngine = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -211,20 +204,39 @@ const FileStorageEngine = multer.diskStorage({
 
 const upload = multer({ storage: FileStorageEngine });
 
-router.post("/file", upload.single("file"), async (req, res) => {
-  try {
-    const newFile = new File({
-      filename: req.file.filename,
-      path: req.file.path,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      classId: req.body.classId,
-    });
+router.post(
+  "/file",
+  authMiddleware,
+  adminMiddleware,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const newFile = new File({
+        filename: req.file.filename,
+        path: req.file.path,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        classId: req.body.classId,
+        fileUrl: `${req.protocol}://${req.get("host")}/uploads/${
+          req.file.filename
+        }`,
+      });
 
-    await newFile.save();
-    res.send("Single file upload success");
-  } catch (error) {
-    res.status(500).send("Error uploading file");
+      await newFile.save();
+      res.send("Single file upload success");
+    } catch (error) {
+      res.status(500).send("Error uploading file");
+    }
+  }
+);
+
+router.get("/files/:classId", authMiddleware, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const files = await File.find({ classId });
+    res.status(200).json(files);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 module.exports = router;
