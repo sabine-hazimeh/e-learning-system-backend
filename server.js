@@ -1,9 +1,10 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+// const path = require("path");
 const db = require("./db");
 const routes = require("./routes");
-
+// const multer = require("multer");
 const app = express();
 
 app.use(
@@ -20,9 +21,21 @@ app.use(
     credentials: true,
   })
 );
-
+// const FileStorageEngine = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, "./uploads");
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, Date.now() + "--" + file.originalname);
+//   },
+// });
+// const upload = multer({ storage: FileStorageEngine });
+// app.post("/file", upload.single("file"), (req, res) => {
+//   console.log(req.file);
+//   res.send("single file upload success");
+// });
 app.use(bodyParser.json());
-app.use("/uploads", express.static("uploads"));
+
 app.use("/api", routes);
 
 const PORT = process.env.PORT || 3000;

@@ -6,6 +6,7 @@ const File = require("./models/File");
 const Enrollment = require("./models/Enrollment");
 const Withdrawal = require("./models/Withdrawal");
 const { generateToken } = require("./utils/jwt");
+const multer = require("multer");
 const authMiddleware = require("./utils/authMiddleware");
 const adminMiddleware = require("./utils/adminMiddleware");
 router.post("/register", async (req, res) => {
@@ -23,11 +24,21 @@ router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
+
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
+
     const token = generateToken(user);
-    res.status(200).json({ token });
+
+    res.status(200).json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+      },
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -75,23 +86,20 @@ router.get("/enrollment", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/files", async (req, res) => {
-  try {
-    const file = new File(req.body);
-    await file.save();
-    res.status(201).json(file);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+// router.post("/files", async (req, res) => {
+//   try {
+//     const file = new File(req.body);
+//     await file.save();
+//     res.status(201).json(file);
+//   } catch (err) {
+//     res.status(400).json({ error: err.message });
+//   }
+// });
 
 router.get("/files/:classId", async (req, res) => {
   try {
     const { classId } = req.params;
-    const files = await File.find({ classId }).populate(
-      "uploadedBy",
-      "username"
-    );
+    const files = await File.find({ classId });
     res.status(200).json(files);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -189,6 +197,34 @@ router.post("/withdrawals/accept/:id", async (req, res) => {
       .json({ message: "Withdrawal accepted and enrollment removed" });
   } catch (error) {
     res.status(500).json({ error: "Failed to accept withdrawal" });
+  }
+});
+
+const FileStorageEngine = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "./uploads");
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
+
+const upload = multer({ storage: FileStorageEngine });
+
+router.post("/file", upload.single("file"), async (req, res) => {
+  try {
+    const newFile = new File({
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      classId: req.body.classId,
+    });
+
+    await newFile.save();
+    res.send("Single file upload success");
+  } catch (error) {
+    res.status(500).send("Error uploading file");
   }
 });
 module.exports = router;
